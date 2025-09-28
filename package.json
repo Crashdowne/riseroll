@@ -8,12 +8,12 @@
   "keywords": ["pwa", "vue", "morning", "activities", "productivity", "progressive-web-app"],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/workingcomputers/riseroll.git"
+    "url": "git+https://github.com/Crashdowne/riseroll.git"
   },
   "bugs": {
-    "url": "https://github.com/workingcomputers/riseroll/issues"
+    "url": "https://github.com/Crashdowne/riseroll/issues"
   },
-  "homepage": "https://github.com/workingcomputers/riseroll#readme",
+  "homepage": "https://github.com/Crashdowne/riseroll#readme",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

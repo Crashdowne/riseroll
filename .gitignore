@@ -20,6 +20,12 @@ config.example.js
 sample-activities.csv
 .cursorrules
 
+# Deployment configs (removed - manual deployment only)
+# .github/
+# vercel.json
+# _redirects
+# public/_headers
+
 # Environment variables
 .env
 .env.local

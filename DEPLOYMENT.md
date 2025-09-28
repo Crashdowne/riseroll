@@ -138,8 +138,4 @@ npm run release
 ## 🔧 PWA Requirements
 
 ### HTTPS Required
-PWAs require HTTPS in production. Most hosting platforms provide this automatically:
-- **Netlify**: Automatic HTTPS
-- **Vercel**: Automatic HTTPS
-- **GitHub Pages**: Automatic HTTPS
-- **Custom Servers**: Configure SSL certificate
+PWAs require HTTPS in production. You'll need to configure SSL certificate on your VPS or hosting provider.

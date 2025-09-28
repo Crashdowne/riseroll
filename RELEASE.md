@@ -72,9 +72,9 @@ npm version minor
 npm version major
 ```
 
-### Git Tags
+### Git Tags (Optional)
 ```bash
-# Create and push git tag
+# Create and push git tag (if using git)
 git tag v1.0.0
 git push origin v1.0.0
 ```
@@ -83,10 +83,10 @@ git push origin v1.0.0
 
 - [ ] Code is tested and working
 - [ ] Version updated in package.json
-- [ ] Build completes without errors
-- [ ] Release package created
-- [ ] Deployed and tested on server
-- [ ] Git tag created and pushed
+- [ ] Build completes without errors (`npm run build`)
+- [ ] Release package created (`npm run release`)
+- [ ] Deployed and tested on VPS/local server
+- [ ] Git tag created and pushed (optional)
 
 ## 🎯 Current Version
 
