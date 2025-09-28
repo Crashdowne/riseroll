@@ -1,0 +1,48 @@
+{
+  "name": "riseroll",
+  "version": "1.0.0",
+  "description": "A Progressive Web App for randomly picking daily morning activities with re-roll limits and activity management",
+  "author": "Working Computers",
+  "license": "MIT",
+  "type": "module",
+  "keywords": ["pwa", "vue", "morning", "activities", "productivity", "progressive-web-app"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/workingcomputers/riseroll.git"
+  },
+  "bugs": {
+    "url": "https://github.com/workingcomputers/riseroll/issues"
+  },
+  "homepage": "https://github.com/workingcomputers/riseroll#readme",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "release": "npm run build && npm run package",
+    "package": "VERSION=$(node -p 'require(\"./package.json\").version') && cd dist && tar -czf ../riseroll-v$VERSION.tar.gz . && cd .. && echo \"Release package created: riseroll-v$VERSION.tar.gz\"",
+    "deploy:local": "npm run build && cd dist && python -m http.server 8000",
+    "deploy:serve": "npm run build && npx serve -s dist -l 3000",
+    "clean": "rm -rf dist/ riseroll-v*.tar.gz riseroll-v*-DEPLOYMENT.txt",
+    "lint": "echo 'No linting configured'",
+    "test": "echo 'No tests configured'"
+  },
+  "dependencies": {
+    "@heroicons/vue": "^2.2.0",
+    "@tailwindcss/postcss": "^4.1.13",
+    "@vueuse/rxjs": "^13.9.0",
+    "dexie": "^4.2.0",
+    "pinia": "^3.0.3",
+    "rxjs": "^7.8.2",
+    "vue": "^3.5.11",
+    "vue-router": "^4.4.5",
+    "workbox-window": "^7.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.15",
+    "vite": "^7.1.7",
+    "vite-plugin-pwa": "^1.0.3"
+  }
+}

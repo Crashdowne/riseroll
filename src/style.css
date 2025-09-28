@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #1A2B4D;
+    line-height: 1.6;
+  }
+  
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  /* Responsive design components */
+  .app-header {
+    @apply flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 border-b border-gray-600;
+  }
+  
+  .app-container {
+    @apply px-4 sm:px-6 lg:px-8 py-6 sm:py-8;
+  }
+  
+  .content-card {
+    @apply bg-[#F5F5DC] rounded-2xl sm:rounded-3xl p-6 sm:p-8;
+  }
+  
+  .button-primary {
+    @apply bg-[#1A2B4D] text-white font-medium py-3 sm:py-4 px-4 sm:px-6 rounded-lg sm:rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2a3f5f] transition-colors text-base sm:text-lg;
+  }
+  
+  .button-secondary {
+    @apply bg-orange-500 text-white font-medium py-3 sm:py-4 px-4 sm:px-6 rounded-lg sm:rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-600 transition-colors text-base sm:text-lg;
+  }
+  
+  .input-field {
+    @apply px-4 py-3 sm:py-4 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-[#1A2B4D] focus:border-transparent text-gray-800 text-base sm:text-lg;
+  }
+  
+  .activity-item {
+    @apply flex items-center gap-4 p-4 sm:p-6 bg-white rounded-lg sm:rounded-xl group hover:shadow-md transition-shadow;
+  }
+  
+  /* Custom scrollbar for activities list */
+  .activities-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 #f7fafc;
+  }
+  
+  .activities-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .activities-scroll::-webkit-scrollbar-track {
+    background: #f7fafc;
+    border-radius: 3px;
+  }
+  
+  .activities-scroll::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 3px;
+  }
+  
+  .activities-scroll::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+  }
+}
