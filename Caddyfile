@@ -1,0 +1,65 @@
+# RiseRoll PWA - Caddy Configuration
+# Place this file in your Caddy site directory
+
+# Your domain - replace with your actual domain
+your-domain.com {
+    # Enable file server
+    file_server {
+        # Serve from the dist directory (after extracting the release package)
+        root /var/www/riseroll
+        
+        # Enable directory browsing (optional)
+        browse
+        
+        # Handle SPA routing - serve index.html for all routes
+        try_files {path} /index.html
+    }
+    
+    # PWA-specific headers
+    header {
+        # Service Worker
+        /sw.js {
+            Cache-Control "public, max-age=0"
+            Service-Worker-Allowed "/"
+        }
+        
+        # Manifest
+        /manifest.webmanifest {
+            Content-Type "application/manifest+json"
+            Cache-Control "public, max-age=86400"
+        }
+        
+        # Static assets (CSS, JS, images)
+        /assets/* {
+            Cache-Control "public, max-age=31536000"
+        }
+        
+        # HTML files
+        *.html {
+            Cache-Control "public, max-age=0"
+        }
+        
+        # Security headers
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+    
+    # Enable compression
+    encode gzip
+    
+    # Logging (optional)
+    log {
+        output file /var/log/caddy/riseroll.log
+    }
+}
+
+# Alternative: Serve from subdirectory
+# your-domain.com/riseroll {
+#     file_server {
+#         root /var/www/riseroll
+#         try_files {path} /index.html
+#     }
+#     # ... same headers as above
+# }

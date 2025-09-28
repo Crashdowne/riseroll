@@ -37,6 +37,11 @@ Upload the `dist/` folder contents (or extract the tar.gz) to your web server.
    - Caching rules
    - Compression
 
+### Caddy Server (Recommended)
+1. **Upload Files**: Upload `dist/` contents to `/var/www/riseroll/`
+2. **Add Caddyfile**: Use the included `Caddyfile` configuration
+3. **Reload Caddy**: `sudo caddy reload` or `sudo systemctl reload caddy`
+
 ### Nginx Server
 1. **Upload Files**: Upload `dist/` contents to your web directory
 2. **Add Configuration**: Add this to your nginx server block:
@@ -77,6 +82,58 @@ server {
 ```
 
 3. **Restart Nginx**: `sudo systemctl restart nginx`
+
+## 🚀 Caddy Deployment (Recommended)
+
+### Why Caddy?
+- **Automatic HTTPS**: Caddy automatically handles SSL certificates
+- **Simple Configuration**: Much simpler than Nginx/Apache
+- **PWA Optimized**: Perfect for serving static PWAs
+- **Built-in Compression**: Automatic gzip compression
+
+### Step-by-Step Caddy Deployment
+
+1. **Create Release Package**:
+   ```bash
+   npm run release
+   ```
+
+2. **Upload to VPS**:
+   ```bash
+   # Extract the package
+   tar -xzf riseroll-v1.0.0.tar.gz
+   
+   # Upload to your VPS
+   scp -r * user@your-vps:/var/www/riseroll/
+   ```
+
+3. **Configure Caddy**:
+   ```bash
+   # Copy the Caddyfile to your Caddy sites directory
+   scp Caddyfile user@your-vps:/etc/caddy/sites/
+   
+   # Or add to your main Caddyfile
+   cat Caddyfile >> /etc/caddy/Caddyfile
+   ```
+
+4. **Update Domain**:
+   ```bash
+   # Edit the Caddyfile on your VPS
+   sudo nano /etc/caddy/sites/Caddyfile
+   # Change 'your-domain.com' to your actual domain
+   ```
+
+5. **Reload Caddy**:
+   ```bash
+   sudo caddy reload
+   # or
+   sudo systemctl reload caddy
+   ```
+
+6. **Verify Deployment**:
+   - Visit your domain
+   - Check that PWA installs correctly
+   - Test offline functionality
 
 ## 🏠 Local Deployment
 
