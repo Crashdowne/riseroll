@@ -124,8 +124,6 @@ export const useActivityStore = defineStore('activity', {
     async pickActivity() {
       if (this.activities.length === 0) return null
       
-      this.checkReset()
-      
       // If already picked today, don't allow another pick
       if (this.lastRollDate && this.isToday(new Date(this.lastRollDate))) {
         return this.selectedActivity
@@ -253,11 +251,34 @@ export const useActivityStore = defineStore('activity', {
           lastRollDate: lastRollDateSetting?.value
         })
 
-        this.selectedActivity = selectedActivitySetting?.value || null
-        this.rerollsLeft = parseInt(rerollsLeftSetting?.value) || 2
-        this.lastRollDate = lastRollDateSetting?.value || null
+        // Load the values first, treating empty strings as null
+        const loadedActivity = selectedActivitySetting?.value && selectedActivitySetting.value !== '' 
+          ? selectedActivitySetting.value 
+          : null
+        const loadedRerolls = rerollsLeftSetting?.value 
+          ? parseInt(rerollsLeftSetting.value) 
+          : 2
+        const loadedLastRoll = lastRollDateSetting?.value && lastRollDateSetting.value !== '' 
+          ? lastRollDateSetting.value 
+          : null
 
-        this.checkReset()
+        // Check if we need to reset (new day)
+        if (loadedLastRoll) {
+          const lastRoll = new Date(loadedLastRoll)
+          if (!this.isToday(lastRoll)) {
+            // It's a new day, reset everything
+            this.selectedActivity = null
+            this.rerollsLeft = 2
+            this.lastRollDate = null
+            await this.saveSettings()
+            return
+          }
+        }
+
+        // Same day or no previous roll, keep the loaded values
+        this.selectedActivity = loadedActivity
+        this.rerollsLeft = loadedRerolls
+        this.lastRollDate = loadedLastRoll
       } catch (error) {
         console.error('Error loading settings:', error)
       }
