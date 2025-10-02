@@ -1,5 +1,15 @@
 <template>
   <div class="min-h-screen bg-[#1A2B4D] dark:bg-gray-900 text-white transition-colors" :class="{ 'pb-80': isKeyboardOpen }">
+    <!-- Loading Screen -->
+    <div v-if="isInitializing" class="min-h-screen flex items-center justify-center">
+      <div class="text-center">
+        <LoadingSpinner size="lg" class="mb-4" />
+        <p class="text-lg text-gray-300">Loading your activities...</p>
+      </div>
+    </div>
+
+    <!-- Main App Content -->
+    <div v-else>
     <!-- Header -->
     <div class="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 border-b border-gray-600 dark:border-gray-700">
       <div class="flex items-center space-x-3">
@@ -17,8 +27,8 @@
           <MoonIcon v-else class="w-5 h-5 text-blue-300" />
         </button>
         
-        <!-- Navigation -->
-        <div class="flex space-x-1">
+        <!-- Navigation - Hidden when locked in -->
+        <div v-if="!isLockedIn" class="flex space-x-1">
           <button class="px-3 sm:px-4 py-1 sm:py-2 text-sm sm:text-base font-medium text-white border-b-2 border-yellow-400">
             Pick
           </button>
@@ -39,6 +49,9 @@
             <h3 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-[#1A2B4D] dark:text-blue-400 mb-6">
               {{ selectedActivity }}
             </h3>
+            <div v-if="isLockedIn" class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+              🔒 Locked In
+            </div>
           </div>
           <div v-else class="text-center mb-8">
             <h3 class="text-2xl sm:text-3xl font-semibold text-gray-600 dark:text-gray-300">
@@ -46,8 +59,8 @@
             </h3>
           </div>
 
-          <!-- Action Buttons -->
-          <div class="space-y-3 sm:space-y-4 mb-6">
+          <!-- Action Buttons - Only show if not locked in -->
+          <div v-if="!isLockedIn" class="space-y-3 sm:space-y-4 mb-6">
             <button
               v-if="!selectedActivity"
               @click="pickActivity"
@@ -59,7 +72,7 @@
             </button>
             
             <button
-              v-if="selectedActivity"
+              v-if="selectedActivity && canReroll"
               @click="reroll"
               :disabled="!canReroll || isLoading"
               class="w-full bg-orange-500 text-white font-medium py-3 sm:py-4 px-4 sm:px-6 rounded-lg sm:rounded-xl text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-600 transition-colors"
@@ -67,19 +80,32 @@
               <LoadingSpinner v-if="isLoading" size="sm" class="mr-2" />
               Re-roll ({{ rerollsLeft }} left)
             </button>
+
+            <button
+              v-if="canLockIn"
+              @click="lockIn"
+              :disabled="isLoading"
+              class="w-full bg-green-600 text-white font-medium py-3 sm:py-4 px-4 sm:px-6 rounded-lg sm:rounded-xl text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-700 transition-colors"
+            >
+              <LoadingSpinner v-if="isLoading" size="sm" class="mr-2" />
+              🔒 Lock In
+            </button>
           </div>
 
           <!-- Status Info -->
           <div class="text-center text-sm sm:text-base text-gray-600 dark:text-gray-300">
             <p>{{ timeUntilReset }}</p>
-            <p v-if="!hasActivities" class="text-red-500 dark:text-red-400 mt-2">
+            <p v-if="!hasActivities && !isLockedIn" class="text-red-500 dark:text-red-400 mt-2">
               Add some activities first!
+            </p>
+            <p v-if="isLockedIn" class="text-green-600 dark:text-green-400 mt-2">
+              You're committed to this activity until tomorrow!
             </p>
           </div>
         </div>
 
-      <!-- History Section -->
-      <div v-if="history && history.length > 0">
+      <!-- History Section - Hidden when locked in -->
+      <div v-if="history && history.length > 0 && !isLockedIn">
         <h3 class="text-2xl sm:text-3xl font-bold text-white mb-6">History</h3>
         <div class="space-y-3">
           <div
@@ -95,6 +121,7 @@
         </div>
       </div>
       </div>
+    </div>
     </div>
   </div>
 </template>
@@ -115,8 +142,17 @@ const notificationStore = useNotificationStore()
 const { 
   pickActivity: storePickActivity,
   reroll: storeReroll,
-  load
+  lockIn: storeLockIn,
+  load,
+  debugDatabase,
+  testPersistence
 } = store
+
+// Expose debug methods globally for testing
+if (typeof window !== 'undefined') {
+  window.debugDatabase = debugDatabase
+  window.testPersistence = testPersistence
+}
 
 // Reactive data from database
 const activities = useLiveActivities()
@@ -126,10 +162,12 @@ const history = useLiveHistory()
 const selectedActivity = computed(() => store.selectedActivity)
 const rerollsLeft = computed(() => store.rerollsLeft)
 const lastRollDate = computed(() => store.lastRollDate)
+const isLockedIn = computed(() => store.isLockedIn)
 const isDark = computed(() => themeStore.isDark)
 
 // Loading state
 const isLoading = ref(false)
+const isInitializing = ref(true)
 
 // Mobile keyboard detection
 const isKeyboardOpen = ref(false)
@@ -164,11 +202,11 @@ const timeUntilReset = computed(() => {
   
   const now = new Date()
   const lastRoll = new Date(lastRollDate.value)
-  const tomorrow = new Date(lastRoll)
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  tomorrow.setHours(0, 0, 0, 0)
+  const resetTime = new Date(lastRoll)
+  resetTime.setDate(resetTime.getDate() + 1)
+  resetTime.setHours(0, 1, 0, 0) // 12:01am
   
-  const diff = tomorrow - now
+  const diff = resetTime - now
   
   if (diff <= 0) return 'Ready to roll!'
   
@@ -178,8 +216,9 @@ const timeUntilReset = computed(() => {
   return `Resets in ${hours}h ${minutes}m`
 })
 
-const canReroll = computed(() => rerollsLeft.value > 0)
+const canReroll = computed(() => rerollsLeft.value > 0 && !isLockedIn.value)
 const hasActivities = computed(() => activities.value && activities.value.length > 0)
+const canLockIn = computed(() => selectedActivity.value && rerollsLeft.value > 0 && !isLockedIn.value)
 
 const pickActivity = async () => {
   try {
@@ -198,6 +237,17 @@ const reroll = async () => {
     await storeReroll()
   } catch (error) {
     console.error('Error re-rolling:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const lockIn = async () => {
+  try {
+    isLoading.value = true
+    await storeLockIn()
+  } catch (error) {
+    console.error('Error locking in:', error)
   } finally {
     isLoading.value = false
   }
@@ -225,7 +275,13 @@ const formatTime = (dateString) => {
   }
 }
 
-onMounted(() => {
-  load()
+onMounted(async () => {
+  try {
+    await load()
+  } catch (error) {
+    console.error('Error loading app state:', error)
+  } finally {
+    isInitializing.value = false
+  }
 })
 </script>

@@ -8,7 +8,8 @@ export const useActivityStore = defineStore('activity', {
     rerollsLeft: 2,
     lastRollDate: null,
     history: [],
-    recentlyDeleted: null
+    recentlyDeleted: null,
+    isLockedIn: false
   }),
 
   getters: {
@@ -17,11 +18,11 @@ export const useActivityStore = defineStore('activity', {
       
       const now = new Date()
       const lastRoll = new Date(state.lastRollDate)
-      const tomorrow = new Date(lastRoll)
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      tomorrow.setHours(0, 0, 0, 0)
+      const resetTime = new Date(lastRoll)
+      resetTime.setDate(resetTime.getDate() + 1)
+      resetTime.setHours(0, 1, 0, 0) // 12:01am
       
-      const diff = tomorrow - now
+      const diff = resetTime - now
       
       if (diff <= 0) return 'Ready to roll!'
       
@@ -31,9 +32,11 @@ export const useActivityStore = defineStore('activity', {
       return `Resets in ${hours}h ${minutes}m`
     },
 
-    canReroll: (state) => state.rerollsLeft > 0,
+    canReroll: (state) => state.rerollsLeft > 0 && !state.isLockedIn,
 
-    hasActivities: (state) => state.activities.length > 0
+    hasActivities: (state) => state.activities.length > 0,
+
+    canLockIn: (state) => state.selectedActivity && state.rerollsLeft > 0 && !state.isLockedIn
   },
 
   actions: {
@@ -124,9 +127,17 @@ export const useActivityStore = defineStore('activity', {
     async pickActivity() {
       if (this.activities.length === 0) return null
       
-      // If already picked today, don't allow another pick
-      if (this.lastRollDate && this.isToday(new Date(this.lastRollDate))) {
-        return this.selectedActivity
+      // If already picked and it's still before the 12:01am reset, don't allow another pick
+      if (this.lastRollDate) {
+        const now = new Date()
+        const lastRoll = new Date(this.lastRollDate)
+        const resetTime = new Date(lastRoll)
+        resetTime.setDate(resetTime.getDate() + 1)
+        resetTime.setHours(0, 1, 0, 0) // 12:01am
+        
+        if (now < resetTime) {
+          return this.selectedActivity
+        }
       }
       
       // Better randomness using crypto.getRandomValues if available, fallback to Math.random
@@ -151,7 +162,7 @@ export const useActivityStore = defineStore('activity', {
     },
 
     async reroll() {
-      if (this.rerollsLeft <= 0 || this.activities.length === 0) return null
+      if (this.rerollsLeft <= 0 || this.activities.length === 0 || this.isLockedIn) return null
       
       console.log('Before reroll - rerollsLeft:', this.rerollsLeft)
       
@@ -177,16 +188,31 @@ export const useActivityStore = defineStore('activity', {
       return this.selectedActivity
     },
 
+    async lockIn() {
+      if (!this.selectedActivity || this.rerollsLeft <= 0 || this.isLockedIn) return false
+      
+      this.isLockedIn = true
+      await this.saveSettings()
+      
+      return true
+    },
+
     checkReset() {
       if (!this.lastRollDate) return
       
       const now = new Date()
       const lastRoll = new Date(this.lastRollDate)
       
-      if (!this.isToday(lastRoll)) {
+      // Calculate 12:01am of the day after the last roll
+      const resetTime = new Date(lastRoll)
+      resetTime.setDate(resetTime.getDate() + 1)
+      resetTime.setHours(0, 1, 0, 0) // 12:01am
+      
+      if (now >= resetTime) {
         this.rerollsLeft = 2
         this.selectedActivity = null
         this.lastRollDate = null
+        this.isLockedIn = false
         this.saveSettings()
       }
     },
@@ -212,12 +238,6 @@ export const useActivityStore = defineStore('activity', {
       }
     },
 
-    isToday(date) {
-      const today = new Date()
-      return date.getDate() === today.getDate() &&
-             date.getMonth() === today.getMonth() &&
-             date.getFullYear() === today.getFullYear()
-    },
 
     async loadActivities() {
       try {
@@ -241,14 +261,29 @@ export const useActivityStore = defineStore('activity', {
 
     async loadSettings() {
       try {
+        console.log('Loading settings from database...')
+        
+        // Check if database has any settings at all
+        const allSettings = await db.settings.toArray()
+        console.log('All settings in database:', allSettings)
+        
         const selectedActivitySetting = await db.settings.where('key').equals('selectedActivity').first()
         const rerollsLeftSetting = await db.settings.where('key').equals('rerollsLeft').first()
         const lastRollDateSetting = await db.settings.where('key').equals('lastRollDate').first()
+        const isLockedInSetting = await db.settings.where('key').equals('isLockedIn').first()
 
         console.log('Loaded settings from database:', {
           selectedActivity: selectedActivitySetting?.value,
           rerollsLeft: rerollsLeftSetting?.value,
-          lastRollDate: lastRollDateSetting?.value
+          lastRollDate: lastRollDateSetting?.value,
+          isLockedIn: isLockedInSetting?.value
+        })
+
+        console.log('Raw settings data:', {
+          selectedActivitySetting,
+          rerollsLeftSetting,
+          lastRollDateSetting,
+          isLockedInSetting
         })
 
         // Load the values first, treating empty strings as null
@@ -261,15 +296,24 @@ export const useActivityStore = defineStore('activity', {
         const loadedLastRoll = lastRollDateSetting?.value && lastRollDateSetting.value !== '' 
           ? lastRollDateSetting.value 
           : null
+        const loadedIsLockedIn = isLockedInSetting?.value === 'true'
 
-        // Check if we need to reset (new day)
+        // Check if we need to reset (new day - after 12:01am)
         if (loadedLastRoll) {
           const lastRoll = new Date(loadedLastRoll)
-          if (!this.isToday(lastRoll)) {
-            // It's a new day, reset everything
+          const now = new Date()
+          
+          // Calculate 12:01am of the day after the last roll
+          const resetTime = new Date(lastRoll)
+          resetTime.setDate(resetTime.getDate() + 1)
+          resetTime.setHours(0, 1, 0, 0) // 12:01am
+          
+          if (now >= resetTime) {
+            // It's past 12:01am of the next day, reset everything
             this.selectedActivity = null
             this.rerollsLeft = 2
             this.lastRollDate = null
+            this.isLockedIn = false
             await this.saveSettings()
             return
           }
@@ -279,6 +323,14 @@ export const useActivityStore = defineStore('activity', {
         this.selectedActivity = loadedActivity
         this.rerollsLeft = loadedRerolls
         this.lastRollDate = loadedLastRoll
+        this.isLockedIn = loadedIsLockedIn
+
+        console.log('Final loaded state:', {
+          selectedActivity: this.selectedActivity,
+          rerollsLeft: this.rerollsLeft,
+          lastRollDate: this.lastRollDate,
+          isLockedIn: this.isLockedIn
+        })
       } catch (error) {
         console.error('Error loading settings:', error)
       }
@@ -286,42 +338,84 @@ export const useActivityStore = defineStore('activity', {
 
     async saveSettings() {
       try {
-        // Use upsert pattern - update if exists, add if not
-        await db.settings.where('key').equals('selectedActivity').modify({
-          value: this.selectedActivity || '',
-          updatedAt: new Date()
+        console.log('Saving settings to database...', {
+          selectedActivity: this.selectedActivity,
+          rerollsLeft: this.rerollsLeft,
+          lastRollDate: this.lastRollDate,
+          isLockedIn: this.isLockedIn
         })
-        .catch(async () => {
+
+        // Better upsert pattern - check if exists first, then update or add
+        let selectedActivitySetting = await db.settings.where('key').equals('selectedActivity').first()
+        if (selectedActivitySetting) {
+          await db.settings.update(selectedActivitySetting.id, {
+            value: this.selectedActivity || '',
+            updatedAt: new Date()
+          })
+          console.log('Updated selectedActivity setting')
+        } else {
           await db.settings.add({
             key: 'selectedActivity',
             value: this.selectedActivity || '',
             updatedAt: new Date()
           })
-        })
+          console.log('Added new selectedActivity setting')
+        }
 
-        await db.settings.where('key').equals('rerollsLeft').modify({
-          value: this.rerollsLeft.toString(),
-          updatedAt: new Date()
-        })
-        .catch(async () => {
+        let rerollsLeftSetting = await db.settings.where('key').equals('rerollsLeft').first()
+        if (rerollsLeftSetting) {
+          await db.settings.update(rerollsLeftSetting.id, {
+            value: this.rerollsLeft.toString(),
+            updatedAt: new Date()
+          })
+          console.log('Updated rerollsLeft setting')
+        } else {
           await db.settings.add({
             key: 'rerollsLeft',
             value: this.rerollsLeft.toString(),
             updatedAt: new Date()
           })
-        })
+          console.log('Added new rerollsLeft setting')
+        }
 
-        await db.settings.where('key').equals('lastRollDate').modify({
-          value: this.lastRollDate || '',
-          updatedAt: new Date()
-        })
-        .catch(async () => {
+        let lastRollDateSetting = await db.settings.where('key').equals('lastRollDate').first()
+        if (lastRollDateSetting) {
+          await db.settings.update(lastRollDateSetting.id, {
+            value: this.lastRollDate || '',
+            updatedAt: new Date()
+          })
+          console.log('Updated lastRollDate setting')
+        } else {
           await db.settings.add({
             key: 'lastRollDate',
             value: this.lastRollDate || '',
             updatedAt: new Date()
           })
-        })
+          console.log('Added new lastRollDate setting')
+        }
+
+        let isLockedInSetting = await db.settings.where('key').equals('isLockedIn').first()
+        if (isLockedInSetting) {
+          await db.settings.update(isLockedInSetting.id, {
+            value: this.isLockedIn.toString(),
+            updatedAt: new Date()
+          })
+          console.log('Updated isLockedIn setting')
+        } else {
+          await db.settings.add({
+            key: 'isLockedIn',
+            value: this.isLockedIn.toString(),
+            updatedAt: new Date()
+          })
+          console.log('Added new isLockedIn setting')
+        }
+
+        console.log('Settings saved successfully to database')
+        
+        // Verify the data was actually saved
+        const verification = await db.settings.toArray()
+        console.log('Verification - all settings in database:', verification)
+        
       } catch (error) {
         console.error('Error saving settings:', error)
       }
@@ -331,17 +425,27 @@ export const useActivityStore = defineStore('activity', {
       this.rerollsLeft = 2
       this.selectedActivity = null
       this.lastRollDate = null
+      this.isLockedIn = false
       await this.saveSettings()
     },
 
     async load() {
       try {
+        console.log('Starting to load app state...')
+        
         // Load all data
         await this.loadActivities()
         await this.loadHistory()
         await this.loadSettings()
         
         console.log('App state loaded successfully from database')
+        console.log('Current store state after loading:', {
+          selectedActivity: this.selectedActivity,
+          rerollsLeft: this.rerollsLeft,
+          lastRollDate: this.lastRollDate,
+          isLockedIn: this.isLockedIn,
+          activitiesCount: this.activities.length
+        })
       } catch (error) {
         console.error('Error loading app state:', error)
         console.log('Falling back to default state')
@@ -353,6 +457,80 @@ export const useActivityStore = defineStore('activity', {
         this.lastRollDate = null
         this.history = []
         this.recentlyDeleted = null
+        this.isLockedIn = false
+      }
+    },
+
+    // Debug method to test database functionality
+    async debugDatabase() {
+      console.log('=== DATABASE DEBUG ===')
+      try {
+        // Test database connection
+        console.log('Database name:', db.name)
+        console.log('Database version:', db.verno)
+        console.log('Database is open:', db.isOpen())
+        
+        const activities = await db.activities.toArray()
+        const settings = await db.settings.toArray()
+        const history = await db.history.toArray()
+        
+        console.log('Activities:', activities)
+        console.log('Settings:', settings)
+        console.log('History:', history)
+        
+        return { activities, settings, history }
+      } catch (error) {
+        console.error('Database debug error:', error)
+        return null
+      }
+    },
+
+    // Test method to manually save and load data
+    async testPersistence() {
+      console.log('=== TESTING PERSISTENCE ===')
+      try {
+        // Save test data
+        this.selectedActivity = 'Test Activity'
+        this.rerollsLeft = 1
+        this.lastRollDate = new Date().toISOString()
+        this.isLockedIn = true
+        
+        console.log('Before save:', {
+          selectedActivity: this.selectedActivity,
+          rerollsLeft: this.rerollsLeft,
+          lastRollDate: this.lastRollDate,
+          isLockedIn: this.isLockedIn
+        })
+        
+        await this.saveSettings()
+        
+        // Clear state
+        this.selectedActivity = null
+        this.rerollsLeft = 2
+        this.lastRollDate = null
+        this.isLockedIn = false
+        
+        console.log('After clearing:', {
+          selectedActivity: this.selectedActivity,
+          rerollsLeft: this.rerollsLeft,
+          lastRollDate: this.lastRollDate,
+          isLockedIn: this.isLockedIn
+        })
+        
+        // Load from database
+        await this.loadSettings()
+        
+        console.log('After loading:', {
+          selectedActivity: this.selectedActivity,
+          rerollsLeft: this.rerollsLeft,
+          lastRollDate: this.lastRollDate,
+          isLockedIn: this.isLockedIn
+        })
+        
+        return 'Test completed - check console logs'
+      } catch (error) {
+        console.error('Persistence test error:', error)
+        return 'Test failed'
       }
     }
   }

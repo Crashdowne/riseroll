@@ -11,7 +11,8 @@ db.version(1).stores({
   history: '++id, activity, timestamp, date'
 });
 
-// Simple database initialization without event listeners
+// Simple database initialization
+console.log('Initializing database:', dbName)
 
 // Define the database schema types
 export const Activity = {

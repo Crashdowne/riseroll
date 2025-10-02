@@ -76,7 +76,7 @@
               <input
                 ref="csvFileInput"
                 type="file"
-                accept=".csv"
+                accept=".csv,.txt"
                 @change="handleCsvImport"
                 class="hidden"
               />
@@ -210,6 +210,7 @@ import { useNotificationStore } from '../stores/notificationStore'
 import { useLiveActivities } from '../composables/useLiveData'
 import { SunIcon, MoonIcon } from '@heroicons/vue/24/outline'
 import LoadingSpinner from '../components/LoadingSpinner.vue'
+import Papa from 'papaparse'
 
 const store = useActivityStore()
 const themeStore = useThemeStore()
@@ -324,47 +325,191 @@ const triggerCsvImport = () => {
   csvFileInput.value?.click()
 }
 
+// Security validation for CSV files
+const validateCsvFile = (file) => {
+  const errors = []
+  
+  // Check file extension
+  const allowedExtensions = ['.csv', '.txt']
+  const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'))
+  if (!allowedExtensions.includes(fileExtension)) {
+    errors.push(`Invalid file extension. Only ${allowedExtensions.join(', ')} files are allowed.`)
+  }
+  
+  // Check MIME type
+  const allowedMimeTypes = [
+    'text/csv',
+    'text/plain',
+    'application/csv',
+    'application/vnd.ms-excel'
+  ]
+  if (!allowedMimeTypes.includes(file.type) && file.type !== '') {
+    errors.push(`Invalid file type. Expected CSV file, got: ${file.type}`)
+  }
+  
+  // Check file size (max 1MB)
+  const maxSize = 1024 * 1024 // 1MB
+  if (file.size > maxSize) {
+    errors.push(`File too large. Maximum size is ${maxSize / 1024 / 1024}MB.`)
+  }
+  
+  // Check for suspicious file names
+  const suspiciousPatterns = [
+    /\.(exe|bat|cmd|scr|pif|com|vbs|js|jar|app|deb|pkg|dmg)$/i,
+    /[<>:"|?*]/,
+    /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
+  ]
+  
+  for (const pattern of suspiciousPatterns) {
+    if (pattern.test(file.name)) {
+      errors.push('Suspicious file name detected.')
+      break
+    }
+  }
+  
+  return errors
+}
+
+// Sanitize and validate activity content
+const sanitizeActivity = (activity) => {
+  if (typeof activity !== 'string') return null
+  
+  // Remove potentially dangerous characters and scripts
+  let sanitized = activity
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
+    .replace(/<[^>]*>/g, '') // Remove HTML tags
+    .replace(/javascript:/gi, '') // Remove javascript: protocols
+    .replace(/data:/gi, '') // Remove data: protocols
+    .replace(/vbscript:/gi, '') // Remove vbscript: protocols
+    .trim()
+  
+  // Validate length
+  if (sanitized.length === 0) return null
+  if (sanitized.length > 200) return null // Max 200 characters
+  
+  // Check for suspicious patterns
+  const suspiciousPatterns = [
+    /eval\s*\(/i,
+    /function\s*\(/i,
+    /setTimeout\s*\(/i,
+    /setInterval\s*\(/i,
+    /document\./i,
+    /window\./i,
+    /alert\s*\(/i,
+    /confirm\s*\(/i,
+    /prompt\s*\(/i
+  ]
+  
+  for (const pattern of suspiciousPatterns) {
+    if (pattern.test(sanitized)) {
+      return null // Reject suspicious content
+    }
+  }
+  
+  return sanitized
+}
+
 const handleCsvImport = async (event) => {
   const file = event.target.files[0]
   if (!file) return
 
   try {
     isLoading.value = true
-    const text = await file.text()
-    const lines = text.split('\n').filter(line => line.trim())
     
-    let importedCount = 0
-    let duplicateCount = 0
+    // Validate file security
+    const validationErrors = validateCsvFile(file)
+    if (validationErrors.length > 0) {
+      notificationStore.error(`File validation failed: ${validationErrors.join(' ')}`, 3000)
+      event.target.value = ''
+      return
+    }
     
-    for (const line of lines) {
-      const activity = line.trim().replace(/^["']|["']$/g, '') // Remove quotes
-      if (activity) {
-        const success = await storeAddActivity(activity)
-        if (success) {
-          importedCount++
-        } else {
-          duplicateCount++
+    // Use Papa Parse for secure CSV parsing
+    Papa.parse(file, {
+      header: false,
+      skipEmptyLines: true,
+      transformHeader: false,
+      transform: (value) => {
+        // Additional security: limit field length during parsing
+        return typeof value === 'string' ? value.substring(0, 250) : value
+      },
+      complete: async (results) => {
+        try {
+          if (results.errors && results.errors.length > 0) {
+            console.warn('CSV parsing warnings:', results.errors)
+            // Only show error if it's critical
+            const criticalErrors = results.errors.filter(error => error.type === 'Delimiter')
+            if (criticalErrors.length > 0) {
+              notificationStore.error('Invalid CSV format detected.', 2000)
+              return
+            }
+          }
+          
+          let importedCount = 0
+          let duplicateCount = 0
+          let rejectedCount = 0
+          
+          // Limit number of rows to prevent DoS
+          const maxRows = 1000
+          const rowsToProcess = results.data.slice(0, maxRows)
+          
+          if (results.data.length > maxRows) {
+            notificationStore.info(`File contains ${results.data.length} rows. Only processing first ${maxRows} rows.`, 3000)
+          }
+          
+          for (const row of rowsToProcess) {
+            // Handle both single column and multi-column CSV
+            const activityText = Array.isArray(row) ? row[0] : row
+            const sanitizedActivity = sanitizeActivity(activityText)
+            
+            if (sanitizedActivity) {
+              const success = await storeAddActivity(sanitizedActivity)
+              if (success) {
+                importedCount++
+              } else {
+                duplicateCount++
+              }
+            } else {
+              rejectedCount++
+            }
+          }
+          
+          // Show results
+          if (importedCount > 0) {
+            let message = `Successfully imported ${importedCount} activities!`
+            if (duplicateCount > 0) {
+              message += ` (${duplicateCount} duplicates skipped)`
+            }
+            if (rejectedCount > 0) {
+              message += ` (${rejectedCount} invalid entries rejected)`
+            }
+            notificationStore.success(message, 3000)
+          } else if (duplicateCount > 0) {
+            notificationStore.info(`All ${duplicateCount} activities were duplicates and skipped.`, 2000)
+          } else if (rejectedCount > 0) {
+            notificationStore.error(`All ${rejectedCount} entries were invalid and rejected.`, 2000)
+          } else {
+            notificationStore.info('No valid activities found in CSV file.', 2000)
+          }
+          
+        } catch (error) {
+          console.error('Error processing CSV data:', error)
+          notificationStore.error('Error processing CSV data.', 2000)
         }
+      },
+      error: (error) => {
+        console.error('Papa Parse error:', error)
+        notificationStore.error('Failed to parse CSV file. Please check the format.', 2000)
       }
-    }
-    
-    if (importedCount > 0) {
-      let message = `Successfully imported ${importedCount} activities!`
-      if (duplicateCount > 0) {
-        message += ` (${duplicateCount} duplicates skipped)`
-      }
-      notificationStore.success(message, 1000)
-    } else if (duplicateCount > 0) {
-      notificationStore.info(`All ${duplicateCount} activities were duplicates and skipped.`, 1000)
-    } else {
-      notificationStore.info('No valid activities found in CSV file.', 1000)
-    }
+    })
     
     // Reset file input
     event.target.value = ''
+    
   } catch (error) {
     console.error('Error importing CSV:', error)
-    notificationStore.error('Error importing CSV file. Please check the format and try again.', 1000)
+    notificationStore.error('Error importing CSV file. Please try again.', 2000)
+    event.target.value = ''
   } finally {
     isLoading.value = false
   }

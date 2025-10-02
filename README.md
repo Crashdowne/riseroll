@@ -89,6 +89,14 @@ Write in journal
 Practice yoga
 ```
 
+#### Security Features
+- **File Validation**: Only `.csv` and `.txt` files are accepted
+- **MIME Type Checking**: Validates file content type
+- **Size Limits**: Maximum file size of 1MB
+- **Content Sanitization**: Removes HTML, scripts, and suspicious content
+- **Row Limits**: Maximum 1000 rows per file to prevent DoS attacks
+- **Malicious Pattern Detection**: Blocks files with suspicious names or content
+
 ## PWA Installation
 
 ### Mobile (iOS/Android)
