@@ -3,7 +3,6 @@
     <!-- Header -->
     <div class="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 border-b border-gray-600 dark:border-gray-700">
       <div class="flex items-center space-x-3">
-        <img src="/pwa-192x192.png" alt="RiseRoll" class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg" />
         <h1 class="text-xl sm:text-2xl font-bold text-white">RiseRoll</h1>
       </div>
       <div class="flex items-center space-x-2">
