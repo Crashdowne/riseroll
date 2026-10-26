@@ -18,3 +18,7 @@ web:
     - npm run lint
     - npm test
     - npm run build
+
+# Linux jobs run on the GitLab server runner, whose built-in default image is bare alpine.
+default:
+  image: catthehacker/ubuntu:act-latest
